@@ -40,10 +40,10 @@ This project implements a thread-safe memory allocator with two different versio
 - Validates against memory overlaps and leaks
 
 PROJECT2:  
-![PROJECT2 Diagram](images/PROJECT2.png)
+![PROJECT2 Diagram](https://github.com/ankit-raj78/project2/blob/master/flowchart.svg)
 
 SQD:  
-![Sequence Diagram](images/sqd.png)
+![Sequence Diagram](https://github.com/ankit-raj78/project2/blob/master/sqd.png)
 
 ## Compilation & Usage
 ```bash
