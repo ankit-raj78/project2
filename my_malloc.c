@@ -5,6 +5,143 @@
 #include <stdint.h>
 #include <pthread.h>     /* For thread synchronization primitives */
 #include "my_malloc.h"
+#include <time.h>
+#include <sys/time.h>
+
+// Define which version of malloc/free to use
+#define MY_MALLOC(sz) ts_malloc_lock(sz)
+#define MY_FREE(p)    ts_free_lock(p)
+
+typedef struct {
+    char* test_name;
+    double execution_time;
+    int passed;
+} test_result_t;
+
+#define MAX_TESTS 100
+test_result_t results[MAX_TESTS];
+int test_count = 0;
+
+double get_time() {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return tv.tv_sec + tv.tv_usec / 1000000.0;
+}
+
+void run_test(char* name, int (*test_func)()) {
+    double start = get_time();
+    int passed = test_func();
+    double end = get_time();
+    
+    results[test_count].test_name = name;
+    results[test_count].execution_time = end - start;
+    results[test_count].passed = passed;
+    test_count++;
+}
+
+void print_results() {
+    printf("\n=== Test Results ===\n");
+    printf("Memory Metrics:\n");
+    printf("Total Heap Size: %lu bytes\n", get_data_segment_size());
+    printf("Free Space: %lu bytes\n", get_data_segment_free_space_size());
+    printf("\nTest Results:\n");
+    
+    double total_time = 0;
+    int passed = 0;
+    
+    for(int i = 0; i < test_count; i++) {
+        printf("%s: %s (%.4f seconds)\n", 
+            results[i].test_name,
+            results[i].passed ? "PASS" : "FAIL",
+            results[i].execution_time);
+        total_time += results[i].execution_time;
+        if(results[i].passed) passed++;
+    }
+    
+    printf("\nSummary:\n");
+    printf("Total Tests: %d\n", test_count);
+    printf("Passed: %d\n", passed);
+    printf("Failed: %d\n", test_count - passed);
+    printf("Total Time: %.4f seconds\n", total_time);
+}
+
+int test_basic_allocation(void) {
+    void* ptr = MY_MALLOC(10);
+    if (ptr == NULL) return 0;
+    MY_FREE(ptr);
+    return 1;
+}
+
+int test_zero_allocation(void) {
+    void* ptr = MY_MALLOC(0);
+    return ptr == NULL;
+}
+
+int test_multiple_allocations(void) {
+    double start = get_time();
+    
+    // Allocate multiple blocks
+    void* ptrs[100];
+    for(int i = 0; i < 100; i++) {
+        ptrs[i] = MY_MALLOC(1024);
+        if (ptrs[i] == NULL) return 0;
+    }
+    
+    // Free all blocks
+    for(int i = 0; i < 100; i++) {
+        MY_FREE(ptrs[i]);
+    }
+    
+    double end = get_time();
+    printf("Multiple allocations time: %f seconds\n", end - start);
+    return 1;
+}
+
+int test_fragmentation(void) {
+    void* p1 = MY_MALLOC(100);
+    void* p2 = MY_MALLOC(200);
+    void* p3 = MY_MALLOC(100);
+    
+    MY_FREE(p2);  // Create a hole
+    
+    void* p4 = MY_MALLOC(150);  // Should fit in the hole
+    if (p4 == NULL) return 0;
+    
+    MY_FREE(p1);
+    MY_FREE(p3);
+    MY_FREE(p4);
+    return 1;
+}
+
+int test_allocation_speed(void) {
+    const int iterations = 1000;
+    void* ptrs[iterations];
+    
+    double start = get_time();
+    for(int i = 0; i < iterations; i++) {
+        ptrs[i] = MY_MALLOC(1024);
+        if(!ptrs[i]) return 0;
+    }
+    for(int i = 0; i < iterations; i++) {
+        MY_FREE(ptrs[i]);
+    }
+    double end = get_time();
+    
+    printf("Allocation speed: %.2f allocations/second\n", 
+           iterations / (end - start));
+    return 1;
+}
+
+int main(void) {
+    run_test("Basic Allocation", test_basic_allocation);
+    run_test("Zero Allocation", test_zero_allocation);
+    run_test("Multiple Allocations", test_multiple_allocations);
+    run_test("Fragmentation Test", test_fragmentation);
+    run_test("Allocation Speed Test", test_allocation_speed);
+    
+    print_results();
+    return 0;
+}
 
 /* 
  * Block metadata structure
